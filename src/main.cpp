@@ -35,6 +35,10 @@ BLECharacteristic * pTxCharacteristic;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint8_t txValue = 0;
+uint8_t sensor_value = NULL;
+
+// ESP32 ADC1 channel 0 is GPIO 36
+const int adc_pin = 36;
 
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
