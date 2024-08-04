@@ -29,13 +29,14 @@
 #include <BLE2902.h>
 ***********************/
 #include <NimBLEDevice.h>
+#include <Arduino.h>
 
 BLEServer *pServer = NULL;
 BLECharacteristic * pTxCharacteristic;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint8_t txValue = 0;
-uint8_t sensor_value = NULL;
+uint8_t sensor_value = 0;
 
 // ESP32 ADC1 channel 0 is GPIO 36
 const int adc_pin = 36;
@@ -92,10 +93,18 @@ class MyCallbacks: public BLECharacteristicCallbacks {
     }
 };
 
+uint16_t readADC() {
+  uint16_t adc_value = analogRead(adc_pin);
+  return adc_value;
+}
+
 
 void setup() {
   Serial.begin(115200);
   while(!Serial.available());
+
+  analogReadResolution(12); // 12 bits of resolution for ADC readings
+  analogSetAttenuation(ADC_11db); // 0-3.3V range for ADC readings
 
   // Create the BLE Device
   BLEDevice::init("UART Service");
@@ -136,6 +145,7 @@ void setup() {
 
   pRxCharacteristic->setCallbacks(new MyCallbacks());
 
+
   // Start the service
   pService->start();
 
@@ -146,10 +156,17 @@ void setup() {
 
 void loop() {
 
+    // Read ADC value
+    uint16_t sensor_value = readADC();
+
+    // Convert sensor value to two bytes
+    uint8_t sensor_value_bytes[2];
+    sensor_value_bytes[0] = sensor_value & 0xFF;
+    sensor_value_bytes[1] = (sensor_value >> 8) & 0xFF;
+
     if (deviceConnected) {
-        pTxCharacteristic->setValue(&txValue, 1);
+        pTxCharacteristic->setValue(sensor_value_bytes, 2);
         pTxCharacteristic->notify();
-        txValue++;
         delay(10); // bluetooth stack will go into congestion, if too many packets are sent
     }
 
