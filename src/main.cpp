@@ -104,7 +104,6 @@ void setup() {
   Serial.begin(115200);
   while(!Serial.available());
 
-
   analogReadResolution(12); // 12 bits of resolution for ADC readings
   analogSetAttenuation(ADC_11db); // 0-3.3V range for ADC readings
 
@@ -154,11 +153,6 @@ void setup() {
   // Start advertising
   pServer->getAdvertising()->start();
   Serial.println("Waiting a client connection to notify...");
-  
-  // Print the MAC address of the ESP32 of BLE
-  Serial.println("Starting BLE work!");
-  Serial.println("MAC Address: ");
-  Serial.println(NimBLEDevice::getAddress().toString().c_str());
 }
 
 void loop() {
