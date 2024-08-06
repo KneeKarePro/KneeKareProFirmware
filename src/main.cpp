@@ -30,6 +30,7 @@
 ***********************/
 #include <NimBLEDevice.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 BLEServer *pServer = NULL;
 BLECharacteristic * pTxCharacteristic;
@@ -162,16 +163,21 @@ void setup() {
 
 void loop() {
 
-    // Read ADC value
-    uint16_t sensor_value = readADC();
-
-    // Convert sensor value to two bytes
-    uint8_t sensor_value_bytes[2];
-    sensor_value_bytes[0] = sensor_value & 0xFF;
-    sensor_value_bytes[1] = (sensor_value >> 8) & 0xFF;
 
     if (deviceConnected) {
-        pTxCharacteristic->setValue(sensor_value_bytes, 2);
+
+        JsonDocument doc();
+        uint32_t timestamp = 0;
+        doc["sensor"] = readADC();
+        doc["time"] = timestamp;
+        size_t len = measureJson(doc);
+        // Allocate a buffer big enough for the JSON document
+        char* json = char[len];
+        // Serialize the JSON document to the buffer
+        serializeJson(doc, json);
+        // convert to uint8_t buffer with const pointer
+        const uint8_t* buffer = reinterpret_cast<const uint8_t*>(json);
+        pTxCharacteristic->setValue(buffer, len);
         pTxCharacteristic->notify();
         delay(10); // bluetooth stack will go into congestion, if too many packets are sent
     }
