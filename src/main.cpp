@@ -160,18 +160,12 @@ void loop() {
 
     if (deviceConnected) {
 
-        JsonDocument doc();
-        uint32_t timestamp = 0;
-        doc["sensor"] = readADC();
-        doc["time"] = timestamp;
-        size_t len = measureJson(doc);
-        // Allocate a buffer big enough for the JSON document
-        char* json = char[len];
-        // Serialize the JSON document to the buffer
-        serializeJson(doc, json);
+        uint16_t sensor_value = readADC();
+        uint8_t buffer[2];
+        buffer[0] = sensor_value & 0xFF;
+        buffer[1] = (sensor_value >> 8) & 0xFF;
         // convert to uint8_t buffer with const pointer
-        const uint8_t* buffer = reinterpret_cast<const uint8_t*>(json);
-        pTxCharacteristic->setValue(buffer, len);
+        pTxCharacteristic->setValue(buffer, 2);
         pTxCharacteristic->notify();
         delay(10); // bluetooth stack will go into congestion, if too many packets are sent
     }
