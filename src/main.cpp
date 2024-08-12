@@ -102,7 +102,7 @@ uint16_t readADC() {
 
 void setup() {
   Serial.begin(115200);
-  while(!Serial.available());
+  // while(!Serial.available());
 
   analogReadResolution(12); // 12 bits of resolution for ADC readings
   analogSetAttenuation(ADC_11db); // 0-3.3V range for ADC readings
