@@ -1,1 +1,5 @@
 # Knee Kare Pro Firmware
+
+The Knee Kare Pro firmware is a simple BLE streaming device designed to monitor the real-time movement of a knee brace. The firmware is designed to be used with the [Knee Kare Pro BLE Streaming App](https://github.com/KneeKarePro/bt_test), in conjunction with the [Knee Kare Pro Backend](https://github.com/KneeKarePro/FlaskBackend) and [Knee Kare Pro Frontend](https://github.com/KneeKarePro/WebApp).
+
+The firmware is built using the Arduino Framework with PlatformIO. The firmware sits idle until a connection is made, at which point it begins streaming data to the connected device. From that point, the firmware will stream data until the connection is lost. This leaves the device agnostic to the connection, allowing for the device to be used with any BLE device that can read the data, however future work needs to be dedicated to ensuring an offline mode is available for storing the data locally in a compressed format. Considering the limited nature of storage to flash or EEPROM, this will be a challenge focused on the final stages of development.
