@@ -134,6 +134,8 @@ void setup() {
   // Start advertising
   pServer->getAdvertising()->start();
   Serial.println("Waiting a client connection to notify...");
+  // print MAC address
+  Serial.println(BLEDevice::getAddress().toString().c_str());
 }
 
 void loop() {
