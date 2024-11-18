@@ -1,166 +1,83 @@
-/*
-   6E400001-B5A3-F393-E0A9-E50E24DCCA9E Has a characteristic of:
-   6E400002-B5A3-F393-E0A9-E50E24DCCA9E - used for receiving data with "WRITE"
-   Has a characteristic of: 6E400003-B5A3-F393-E0A9-E50E24DCCA9E - used to send
-   data with  "NOTIFY"
+/**
+ * @file main.cpp
+ * @author Cole Rottenberg (cole.rottenberg@gmail.com) 
+ * @brief The goal of this project is to enable our Knee Rehab device to store data on an SD card and when a user connects to the device via Bluetooth, the device will send the data to the user's Laptop. The project will use an ESP32 microcontroller and the Arduino IDE. The project will make use of FreeRTOS tasks to handle the Bluetooth and SD card functionality concurrently.
+ * @version 0.1
+ * @date 2024-11-13
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
 
-   The design of creating the BLE server is:
-   1. Create a BLE Server
-   2. Create a BLE Service
-   3. Create a BLE Characteristic on the Service
-   4. Create a BLE Descriptor on the characteristic
-   5. Start the service.
-   6. Start advertising.
-
-   In this example rxValue is the data received (only accessible inside that
-   function). And txValue is the data to be sent, in this example just a byte
-   incremented every second.
-*/
+// Include Libraries
 #include <Arduino.h>
-#include <ArduinoJson.h>
-#include <NimBLEDevice.h>
+// For FreeRTOS tasks
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+// For BL Classic communication
+#include <BluetoothSerial.h>
+// For the SD card
+#include <SD.h>
+#include <SPI.h>
 
-BLEServer *pServer = NULL;
-BLECharacteristic *pTxCharacteristic;
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
-uint8_t txValue = 0;
-uint8_t sensor_value = 0;
+// Debug Definitions
+#define DEBUG 1
 
-// ESP32 ADC1 channel 0 is GPIO 36 for Potentiometer
-const int adc_pin = 36;
+// Global Instances
+BluetoothSerial SerialBT;
+SemaphoreHandle_t fileMutex;
 
-// See the following for generating UUIDs:
-// https://www.uuidgenerator.net/
-
-#define SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
-#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-
-/**  None of these are required as they will be handled by the library with
- *defaults. **
- **                       Remove as you see fit for your needs */
-class MyServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer *pServer) { deviceConnected = true; };
-
-  void onDisconnect(BLEServer *pServer) { deviceConnected = false; }
-  /***************** New - Security handled here ********************
-  ****** Note: these are the same return values as defaults ********/
-  uint32_t onPassKeyRequest() {
-    Serial.println("Server PassKeyRequest");
-    return 123456;
-  }
-
-  bool onConfirmPIN(uint32_t pass_key) {
-    Serial.print("The passkey YES/NO number: ");
-    Serial.println(pass_key);
-    return true;
-  }
-
-  void onAuthenticationComplete(ble_gap_conn_desc desc) {
-    Serial.println("Starting BLE work!");
-  }
-  /*******************************************************************/
-};
-
-class MyCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *pCharacteristic) {
-    std::string rxValue = pCharacteristic->getValue();
-
-    if (rxValue.length() > 0) {
-      Serial.println("*********");
-      Serial.print("Received Value: ");
-      for (int i = 0; i < rxValue.length(); i++)
-        Serial.print(rxValue[i]);
-
-      Serial.println();
-      Serial.println("*********");
-    }
-  }
-};
-
-uint16_t readADC() {
-  uint16_t adc_value = analogRead(adc_pin);
-  return adc_value;
-}
+// Task Prototypes
+void bluetoothTask(void *pvParameters);
+void sdCardTask(void *pvParameters);
+void readDataFromSDCardTask(void *pvParameters);
+void readPotentiometerTask(void *pvParameters);
 
 void setup() {
-  Serial.begin(115200);
-  // while(!Serial.available());
+  SerialBT.begin("KneeKare Pro Device");
 
-  analogReadResolution(12);       // 12 bits of resolution for ADC readings
-  analogSetAttenuation(ADC_11db); // 0-3.3V range for ADC readings
+  // if DEBUG is defined, print to Serial Monitor
+  #if DEBUG
+    Serial.begin(115200);
+    Serial.println("Serial Monitor is ready");
+  #else
+    // Open the SD card
+    if (!SD.begin()) {
+      Serial.begin(115200);
+      Serial.println("SD Card failed to initialize, please check the card");
+      return;
+    }
+  #endif
 
-  // Create the BLE Device
-  BLEDevice::init("UART Service");
-
-  // Create the BLE Server
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
-
-  // Create the BLE Service
-  BLEService *pService = pServer->createService(SERVICE_UUID);
-
-  // Create a BLE Characteristic
-  pTxCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_TX,
-      /******* Enum Type NIMBLE_PROPERTY now *******
-          BLECharacteristic::PROPERTY_NOTIFY
-          );
-      **********************************************/
-      NIMBLE_PROPERTY::NOTIFY);
-
-  /***************************************************
-   NOTE: DO NOT create a 2902 descriptor
-   it will be created automatically if notifications
-   or indications are enabled on a characteristic.
-
-   pCharacteristic->addDescriptor(new BLE2902());
-  ****************************************************/
-
-  BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID_RX,
-      /******* Enum Type NIMBLE_PROPERTY now *******
-              BLECharacteristic::PROPERTY_WRITE
-              );
-      *********************************************/
-      NIMBLE_PROPERTY::WRITE);
-
-  pRxCharacteristic->setCallbacks(new MyCallbacks());
-
-  // Start the service
-  pService->start();
-
-  // Start advertising
-  pServer->getAdvertising()->start();
-  Serial.println("Waiting a client connection to notify...");
+  // put your setup code here, to run once:
+  fileMutex = xSemaphoreCreateMutex();
 }
 
 void loop() {
+  // put your main code here, to run repeatedly:
+}
 
-  if (deviceConnected) {
-
-    uint16_t sensor_value = readADC();
-    uint8_t buffer[2];
-    buffer[0] = sensor_value & 0xFF;
-    buffer[1] = (sensor_value >> 8) & 0xFF;
-    // convert to uint8_t buffer with const pointer
-    pTxCharacteristic->setValue(buffer, 2);
-    pTxCharacteristic->notify();
-    delay(10); // bluetooth stack will go into congestion, if too many packets
-               // are sent
+void bluetoothTask(void *pvParameters) {
+  for(;;) {
+    // put your code here
   }
+}
 
-  // disconnecting
-  if (!deviceConnected && oldDeviceConnected) {
-    delay(500); // give the bluetooth stack the chance to get things ready
-    pServer->startAdvertising(); // restart advertising
-    Serial.println("start advertising");
-    oldDeviceConnected = deviceConnected;
+void sdCardTask(void *pvParameters) {
+  for(;;) {
+    // put your code here
   }
-  // connecting
-  if (deviceConnected && !oldDeviceConnected) {
-    // do stuff here on connecting
-    oldDeviceConnected = deviceConnected;
+}
+
+void readDataFromSDCardTask(void *pvParameters) {
+  for(;;) {
+    // put your code here
+  }
+}
+
+void readPotentiometerTask(void *pvParameters) {
+  for(;;) {
+    // put your code here
   }
 }
