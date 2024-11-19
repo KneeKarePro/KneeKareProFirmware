@@ -24,5 +24,7 @@ update:
 monitor:
 	pio device monitor
 
+upload-and-monitor: upload monitor
+
 clang: 
 	pio run --target compiledb

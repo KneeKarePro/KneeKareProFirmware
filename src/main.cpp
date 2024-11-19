@@ -88,20 +88,22 @@ void setup() {
 #if DEBUG
   while (!Serial.available())
     ;
-  Serial.println("Serial Monitor is ready");
+  Serial.println(F("Serial Monitor is ready"));
 #endif
 
-  // Initialize the RTC
-  if (!rtc.initialized() || rtc.lostPower()) {
-    rtc.begin();
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
-  rtc.start();
-  Serial.println("RTC initialized " + rtc.now().timestamp());
+  // rtc = RTC_PCF8523();
+  // // Initialize the RTC
+  // if (!rtc.initialized() || rtc.lostPower()) {
+  //   rtc.begin();
+  //   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // }
+  // rtc.start();
+  // Serial.println("RTC initialized " + rtc.now().timestamp());
 
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
     Serial.println("SD Card initialized");
+    Serial.println("Data will be stored in " + String(DATA_FILE));
   } else if (sd_code == SDError::SD_FAILED_TO_INIT) {
     Serial.println("Failed to initialize SD Card");
   } else if (sd_code == SDError::SD_FAILED_TO_OPEN_FILE) {
@@ -125,7 +127,6 @@ void loop() {
 uint8_t initSDCard(uint8_t csPin) {
   // Initialize SPI for SD card | 5: CLK, 19: MISO, 18: MOSI, 33: CS
   SPI.begin(5, 19, 18, csPin);
-  SPI.setDataMode(SPI_MODE0);
   if (!SD.begin(csPin))
     return SDError::SD_FAILED_TO_INIT;
   else {
@@ -149,7 +150,8 @@ void readPotentiometerTask(void *pvParameters) {
   TickType_t lastWakeTime = xTaskGetTickCount();
 
   for (;;) {
-    data.time = rtc.now().unixtime();
+    // data.time = rtc.now().unixtime();
+    data.time = millis();
     data.angle = convertToAngle(analogRead(POT_PIN));
 
     xQueueSend(potDataQueue, &data, 0);
