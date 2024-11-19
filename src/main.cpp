@@ -1,28 +1,32 @@
 /**
  * @file main.cpp
  * @author Cole Rottenberg (cole.rottenberg@gmail.com)
- * @brief The goal of this project is to enable our Knee Rehab device to store data on an SD card and when a user connects to the device via Bluetooth, the device will send the data to the user's Laptop. The project will use an ESP32 microcontroller and the Arduino IDE. The project will make use of FreeRTOS tasks to handle the Bluetooth and SD card functionality concurrently.
+ * @brief The goal of this project is to enable our Knee Rehab device to store
+ * data on an SD card and when a user connects to the device via Bluetooth, the
+ * device will send the data to the user's Laptop. The project will use an ESP32
+ * microcontroller and the Arduino IDE. The project will make use of FreeRTOS
+ * tasks to handle the Bluetooth and SD card functionality concurrently.
  * @version 0.1
  * @date 2024-11-13
- * 
+ *
  * @copyright Copyright (c) 2024
- * 
+ *
  */
 
 // Include Libraries
 #include <Arduino.h>
 // For FreeRTOS tasks
 #include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include <freertos/semphr.h>
+#include <freertos/task.h>
 // For BL Classic communication
 #include <BluetoothSerial.h>
 // For the SD card
+#include <RTClib.h>
 #include <SD.h>
 #include <SPI.h>
-#include <vector>
 #include <time.h>
-#include <RTClib.h>
+#include <vector>
 
 // Debug Definitions
 #define DEBUG 1
@@ -35,12 +39,14 @@ bool bluetoothConnected = false;
 bool dataTransferred = false;
 const int QUEUE_SIZE = 100;
 const int POT_PIN = 34; // Adjust pin as needed
-const char* DATA_FILE = "/pot_data.txt";
+const char *DATA_FILE = "/pot_data.txt";
 
 struct KneeData {
   int time;
   int angle;
 };
+
+int convertToAngle(int rawValue) { return map(rawValue, 0, 4095, 0, 180); };
 
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
@@ -51,16 +57,16 @@ void readPotentiometerTask(void *pvParameters);
 void setup() {
   SerialBT.begin("KneeKare Pro Device");
 
-  // if DEBUG is defined, print to Serial Monitor
-  #if DEBUG
-    Serial.begin(115200);
-    Serial.println("Serial Monitor is ready");
-  #endif
+// if DEBUG is defined, print to Serial Monitor
+#if DEBUG
+  Serial.begin(115200);
+  Serial.println("Serial Monitor is ready");
+#endif
 
   if (!SD.begin()) {
-    #if DEBUG
-      Serial.println("SD Card failed to initialize");
-    #endif
+#if DEBUG
+    Serial.println("SD Card failed to initialize");
+#endif
     return;
   }
 
@@ -82,11 +88,11 @@ void loop() {
 void readPotentiometerTask(void *pvParameters) {
   KneeData data;
   TickType_t lastWakeTime = xTaskGetTickCount();
-  
-  for(;;) {
+
+  for (;;) {
     data.time = millis();
-    data.angle = analogRead(POT_PIN);
-    
+    data.angle = convertToAngle(analogRead(POT_PIN));
+
     xQueueSend(potDataQueue, &data, 0);
     vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(10)); // 100Hz sampling
   }
@@ -96,8 +102,8 @@ void readPotentiometerTask(void *pvParameters) {
 void sdCardTask(void *pvParameters) {
   KneeData data;
   File dataFile;
-  
-  for(;;) {
+
+  for (;;) {
     if (xQueueReceive(potDataQueue, &data, pdMS_TO_TICKS(100)) == pdTRUE) {
       if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         dataFile = SD.open(DATA_FILE, FILE_APPEND);
@@ -115,25 +121,26 @@ void sdCardTask(void *pvParameters) {
 // Implement the Bluetooth task
 void bluetoothTask(void *pvParameters) {
   File dataFile;
-  
-  for(;;) {
+
+  for (;;) {
     if (SerialBT.connected()) {
       if (!bluetoothConnected) {
         bluetoothConnected = true;
-        #if DEBUG
-          Serial.println("Bluetooth Connected");
-        #endif
+#if DEBUG
+        Serial.println("Bluetooth Connected");
+#endif
       }
-      
+
       // Transfer data when connected
-      if (!dataTransferred && xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+      if (!dataTransferred &&
+          xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         dataFile = SD.open(DATA_FILE);
         if (dataFile) {
           while (dataFile.available()) {
             SerialBT.write(dataFile.read());
           }
           dataFile.close();
-          
+
           // Delete file after successful transfer
           SD.remove(DATA_FILE);
           dataTransferred = true;
@@ -145,10 +152,5 @@ void bluetoothTask(void *pvParameters) {
       dataTransferred = false;
     }
     vTaskDelay(pdMS_TO_TICKS(100));
-  }
-}
-
-void readDataFromSDCardTask(void *pvParameters) {
-  for(;;) {
   }
 }
