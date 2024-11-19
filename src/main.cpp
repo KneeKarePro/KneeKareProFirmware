@@ -16,6 +16,7 @@
 // Include Libraries
 #include <Arduino.h>
 // For FreeRTOS tasks
+#include <cstdint>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -26,12 +27,12 @@
 #include <SD.h>
 #include <SPI.h>
 #include <time.h>
-#include <vector>
 
 // Debug Definitions
 #define DEBUG 1
 
 // Global Instances
+RTC_PCF8523 rtc;
 BluetoothSerial SerialBT;
 SemaphoreHandle_t fileMutex;
 QueueHandle_t potDataQueue;
@@ -42,11 +43,13 @@ const int POT_PIN = 34; // Adjust pin as needed
 const char *DATA_FILE = "/pot_data.txt";
 
 struct KneeData {
-  int time;
-  int angle;
+  uint32_t time;
+  uint16_t angle;
 };
 
-int convertToAngle(int rawValue) { return map(rawValue, 0, 4095, 0, 180); };
+uint16_t convertToAngle(uint16_t rawValue) {
+  return map(rawValue, 0, 4095, 0, 180);
+};
 
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
@@ -60,15 +63,32 @@ void setup() {
 // if DEBUG is defined, print to Serial Monitor
 #if DEBUG
   Serial.begin(115200);
+  while (!Serial.available())
+    ;
   Serial.println("Serial Monitor is ready");
 #endif
 
-  if (!SD.begin()) {
+  // SPI.begin(5, 19, 18, 33); // Initialize SPI for SD card | 5: CLK, 19: MISO,
+  // 18: MOSI, 33: CS
+  if (!SD.begin(33)) {
 #if DEBUG
     Serial.println("SD Card failed to initialize");
 #endif
-    return;
+  } else {
+#if DEBUG
+    Serial.println("SD Card initialized");
+#endif
   }
+
+  // Initialize the RTC
+  if (!rtc.initialized() || rtc.lostPower()) {
+    rtc.begin();
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  rtc.start();
+#if DEBUG
+  Serial.println("RTC initialized");
+#endif
 
   // put your setup code here, to run once:
   fileMutex = xSemaphoreCreateMutex();
@@ -90,7 +110,7 @@ void readPotentiometerTask(void *pvParameters) {
   TickType_t lastWakeTime = xTaskGetTickCount();
 
   for (;;) {
-    data.time = millis();
+    data.time = rtc.now().unixtime();
     data.angle = convertToAngle(analogRead(POT_PIN));
 
     xQueueSend(potDataQueue, &data, 0);

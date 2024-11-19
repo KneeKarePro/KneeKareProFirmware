@@ -21,5 +21,8 @@ uploadfs:
 update: 
 	pio -f -c vim update
 
+monitor:
+	pio device monitor
+
 clang: 
 	pio run --target compiledb
