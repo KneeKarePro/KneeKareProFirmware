@@ -43,6 +43,14 @@ enum SDError {
   SD_FAILED_TO_DELETE_FILE = 5
 };
 
+// RTC Error Codes
+enum RTCError {
+  RTC_OK = 0,
+  RTC_FAILED_TO_INIT = 1,
+  RTC_FAILED_TO_SET_TIME = 2,
+  RTC_FAILED_TO_READ_TIME = 3
+};
+
 // Global Instances
 RTC_PCF8523 rtc;
 BluetoothSerial SerialBT;
@@ -74,6 +82,11 @@ uint16_t convertToAngle(uint16_t rawValue) {
  */
 uint8_t initSDCard(uint8_t csPin = 33); // Initialize the SD card
 
+/**
+ * @brief Initialize the RTC
+ */
+uint8_t initRTC();
+
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
 void sdCardTask(void *pvParameters);
@@ -91,15 +104,6 @@ void setup() {
   Serial.println(F("Serial Monitor is ready"));
 #endif
 
-  // rtc = RTC_PCF8523();
-  // // Initialize the RTC
-  // if (!rtc.initialized() || rtc.lostPower()) {
-  //   rtc.begin();
-  //   rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  // }
-  // rtc.start();
-  // Serial.println("RTC initialized " + rtc.now().timestamp());
-
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
     Serial.println("SD Card initialized");
@@ -108,6 +112,15 @@ void setup() {
     Serial.println("Failed to initialize SD Card");
   } else if (sd_code == SDError::SD_FAILED_TO_OPEN_FILE) {
     Serial.println("Failed to open file");
+  }
+
+  uint8_t rtc_code = initRTC();
+  if (rtc_code == RTCError::RTC_OK) {
+    Serial.println("RTC initialized");
+  } else if (rtc_code == RTCError::RTC_FAILED_TO_INIT) {
+    Serial.println("Failed to initialize RTC");
+  } else if (rtc_code == RTCError::RTC_FAILED_TO_SET_TIME) {
+    Serial.println("Failed to set time");
   }
 
   // put your setup code here, to run once:
@@ -144,14 +157,26 @@ uint8_t initSDCard(uint8_t csPin) {
   return SDError::SD_OK;
 }
 
+uint8_t initRTC() {
+  if (!rtc.begin())
+    return RTCError::RTC_FAILED_TO_INIT;
+  else {
+    if (!rtc.initialized() || rtc.lostPower()) {
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+      return RTCError::RTC_FAILED_TO_SET_TIME;
+    } else {
+      return RTCError::RTC_OK;
+    }
+  }
+}
+
 // Implement the potentiometer reading task
 void readPotentiometerTask(void *pvParameters) {
   KneeData data;
   TickType_t lastWakeTime = xTaskGetTickCount();
 
   for (;;) {
-    // data.time = rtc.now().unixtime();
-    data.time = millis();
+    data.time = rtc.now().unixtime();
     data.angle = convertToAngle(analogRead(POT_PIN));
 
     xQueueSend(potDataQueue, &data, 0);
