@@ -23,6 +23,7 @@
 // For BL Classic communication
 #include <BluetoothSerial.h>
 // For the SD card
+#include <FS.h>
 #include <RTClib.h>
 #include <SD.h>
 #include <SPI.h>
@@ -30,6 +31,16 @@
 
 // Debug Definitions
 #define DEBUG 1
+
+// SD Error Codes
+enum SDError {
+  SD_OK = 0,
+  SD_FAILED_TO_INIT = 1,
+  SD_FAILED_TO_OPEN_FILE = 2,
+  SD_FAILED_TO_WRITE_FILE = 3,
+  SD_FAILED_TO_READ_FILE = 4,
+  SD_FAILED_TO_DELETE_FILE = 5
+};
 
 // Global Instances
 RTC_PCF8523 rtc;
@@ -47,9 +58,20 @@ struct KneeData {
   uint16_t angle;
 };
 
+/**
+ * @brief Convert the raw value from the potentiometer to an angle
+ * @param rawValue The raw value from the potentiometer
+ * @return uint16_t The angle in degrees
+ */
 uint16_t convertToAngle(uint16_t rawValue) {
   return map(rawValue, 0, 4095, 0, 180);
 };
+
+/**
+ * @brief Initialize the SD card
+ * @param csPin The chip select pin for the SD card
+ */
+uint8_t initSDCard(uint8_t csPin); // Initialize the SD card
 
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
@@ -60,9 +82,9 @@ void readPotentiometerTask(void *pvParameters);
 void setup() {
   SerialBT.begin("KneeKare Pro Device");
 
-// if DEBUG is defined, print to Serial Monitor
-#if DEBUG
+  // if DEBUG is defined, print to Serial Monitor
   Serial.begin(115200);
+#if DEBUG
   while (!Serial.available())
     ;
   Serial.println("Serial Monitor is ready");
@@ -70,14 +92,13 @@ void setup() {
 
   // SPI.begin(5, 19, 18, 33); // Initialize SPI for SD card | 5: CLK, 19: MISO,
   // 18: MOSI, 33: CS
-  if (!SD.begin(33)) {
-#if DEBUG
-    Serial.println("SD Card failed to initialize");
-#endif
-  } else {
-#if DEBUG
+  uint8_t sd_code = initSDCard(33);
+  if (sd_code == SDError::SD_OK) {
     Serial.println("SD Card initialized");
-#endif
+  } else if (sd_code == SDError::SD_FAILED_TO_INIT) {
+    Serial.println("Failed to initialize SD Card");
+  } else if (sd_code == SDError::SD_FAILED_TO_OPEN_FILE) {
+    Serial.println("Failed to open file");
   }
 
   // Initialize the RTC
@@ -86,9 +107,7 @@ void setup() {
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
   rtc.start();
-#if DEBUG
   Serial.println("RTC initialized");
-#endif
 
   // put your setup code here, to run once:
   fileMutex = xSemaphoreCreateMutex();
@@ -102,6 +121,23 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+}
+
+uint8_t initSDCard(uint8_t csPin) {
+  if (!SD.begin(csPin))
+    return SDError::SD_FAILED_TO_INIT;
+  else {
+    if (!SD.exists(DATA_FILE)) {
+      File dataFile = SD.open(DATA_FILE, FILE_WRITE);
+      // write header to file
+      if (dataFile) {
+        dataFile.println("Time,Angle");
+        dataFile.close();
+        return SDError::SD_OK;
+      }
+      return SDError::SD_FAILED_TO_OPEN_FILE;
+    }
+  }
 }
 
 // Implement the potentiometer reading task
