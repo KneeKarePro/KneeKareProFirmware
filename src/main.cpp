@@ -14,6 +14,7 @@
  */
 
 // Include Libraries
+#include "esp32-hal-spi.h"
 #include <Arduino.h>
 // For FreeRTOS tasks
 #include <cstdint>
@@ -71,7 +72,7 @@ uint16_t convertToAngle(uint16_t rawValue) {
  * @brief Initialize the SD card
  * @param csPin The chip select pin for the SD card
  */
-uint8_t initSDCard(uint8_t csPin); // Initialize the SD card
+uint8_t initSDCard(uint8_t csPin = 33); // Initialize the SD card
 
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
@@ -90,8 +91,14 @@ void setup() {
   Serial.println("Serial Monitor is ready");
 #endif
 
-  // SPI.begin(5, 19, 18, 33); // Initialize SPI for SD card | 5: CLK, 19: MISO,
-  // 18: MOSI, 33: CS
+  // Initialize the RTC
+  if (!rtc.initialized() || rtc.lostPower()) {
+    rtc.begin();
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  rtc.start();
+  Serial.println("RTC initialized " + rtc.now().timestamp());
+
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
     Serial.println("SD Card initialized");
@@ -100,14 +107,6 @@ void setup() {
   } else if (sd_code == SDError::SD_FAILED_TO_OPEN_FILE) {
     Serial.println("Failed to open file");
   }
-
-  // Initialize the RTC
-  if (!rtc.initialized() || rtc.lostPower()) {
-    rtc.begin();
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
-  rtc.start();
-  Serial.println("RTC initialized");
 
   // put your setup code here, to run once:
   fileMutex = xSemaphoreCreateMutex();
@@ -124,6 +123,9 @@ void loop() {
 }
 
 uint8_t initSDCard(uint8_t csPin) {
+  // Initialize SPI for SD card | 5: CLK, 19: MISO, 18: MOSI, 33: CS
+  SPI.begin(5, 19, 18, csPin);
+  SPI.setDataMode(SPI_MODE0);
   if (!SD.begin(csPin))
     return SDError::SD_FAILED_TO_INIT;
   else {
@@ -138,6 +140,7 @@ uint8_t initSDCard(uint8_t csPin) {
       return SDError::SD_FAILED_TO_OPEN_FILE;
     }
   }
+  return SDError::SD_OK;
 }
 
 // Implement the potentiometer reading task
@@ -182,9 +185,7 @@ void bluetoothTask(void *pvParameters) {
     if (SerialBT.connected()) {
       if (!bluetoothConnected) {
         bluetoothConnected = true;
-#if DEBUG
         Serial.println("Bluetooth Connected");
-#endif
       }
 
       // Transfer data when connected
@@ -197,8 +198,6 @@ void bluetoothTask(void *pvParameters) {
           }
           dataFile.close();
 
-          // Delete file after successful transfer
-          SD.remove(DATA_FILE);
           dataTransferred = true;
         }
         xSemaphoreGive(fileMutex);
