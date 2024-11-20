@@ -22,10 +22,10 @@
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 // Web Server Imports
+#include <ESPmDNS.h>
+#include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiAP.h>
-#include <WebServer.h>
-#include <ESPmDNS.h>
 // For the SD card
 #include <FS.h>
 #include <RTClib.h>
@@ -83,10 +83,10 @@ struct KneeData {
 };
 
 /**
- * @brief Convert the raw value from the potentiometer to an angle
- * @param rawValue The raw value from the potentiometer
- * @return uint16_t The angle in degrees
- */
+  * @brief Convert the raw value from the potentiometer to an angle
+  * @param rawValue The raw value from the potentiometer
+  * @return uint16_t The angle in degrees
+  */
 uint16_t convertToAngle(uint16_t rawValue) {
   return map(rawValue, 0, 4095, 0, 180);
 };
@@ -111,6 +111,10 @@ void bluetoothTask(void *pvParameters);
 void sdCardTask(void *pvParameters);
 void readDataFromSDCardTask(void *pvParameters);
 void readPotentiometerTask(void *pvParameters);
+void serverTask(void *pvParameters);
+
+// Helper Functions
+void handleDataRequest(WebServer &server);
 
 void setup() {
 
@@ -122,17 +126,19 @@ void setup() {
   Serial.println(F("Serial Monitor is ready"));
 #endif
 
-    uint8_t net_code = initNetwork();
-    if (net_code == NetworkError::NETWORK_OK)
-    {
-        Serial.println("Network initialized");
-    }
-    else if (net_code == NetworkError::NETWORK_FAILED_TO_INIT)
-    {
-        Serial.println("Failed to initialize network");
-    }
-    
-    // uint8_t ws_code = initWebServer();
+  uint8_t net_code = initNetwork();
+  if (net_code == NetworkError::NETWORK_OK) {
+    Serial.println("Network initialized");
+  } else if (net_code == NetworkError::NETWORK_FAILED_TO_INIT) {
+    Serial.println("Failed to initialize network");
+  }
+
+  uint8_t ws_code = initWebServer();
+  if (ws_code == WebServerError::WEBSERVER_OK) {
+    Serial.println("Web Server initialized");
+  } else if (ws_code == WebServerError::WEBSERVER_FAILED_TO_INIT) {
+    Serial.println("Failed to initialize Web Server");
+  }
 
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
@@ -160,6 +166,7 @@ void setup() {
   // Create tasks with appropriate priorities
   xTaskCreate(readPotentiometerTask, "PotTask", 2048, NULL, 1, NULL);
   xTaskCreate(sdCardTask, "SDTask", 4096, NULL, 2, NULL);
+  xTaskCreate(serverTask, "Server", 4096, NULL, 2, NULL);
 }
 
 void loop() {
@@ -200,9 +207,9 @@ uint8_t initRTC() {
 }
 
 uint8_t initNetwork() {
-  if(WiFi.mode(WIFI_AP)) {
+  if (WiFi.mode(WIFI_AP)) {
     Serial.println("Switched to AP mode");
-    if(WiFi.softAP("KneeRehab", "password")) {
+    if (WiFi.softAP("KneeRehab", "password")) {
       Serial.println("Access Point started");
       Serial.println("IP Address: " + WiFi.softAPIP().toString());
       return NetworkError::NETWORK_OK;
@@ -217,10 +224,16 @@ uint8_t initNetwork() {
 };
 
 uint8_t initWebServer() {
+  // settings up dns
+  if (!MDNS.begin("knee-rehab")) {
+    Serial.println("Failed to start mDNS");
+    return WebServerError::WEBSERVER_FAILED_TO_INIT;
+  } else {
+    Serial.println("mDNS started as knee-rehab.local");
+  }
   WebServer server(80);
-  server.on("/", HTTP_GET, [&server]() {
-    server.send(200, "text/plain", "Hello World");
-  });
+  server.on("/", HTTP_GET,
+            [&server]() { server.send(200, "text/plain", "Hello World"); });
 
   server.begin();
   return WebServerError::WEBSERVER_OK;
@@ -258,4 +271,53 @@ void sdCardTask(void *pvParameters) {
     }
     taskYIELD();
   }
+}
+
+void serverTask(void *pvParameters) {
+  WebServer server(80);
+  server.on("/", HTTP_GET,
+            [&server]() { server.send(200, "text/plain", "Hello World"); });
+
+  server.on("/data", HTTP_GET, [&server]() { handleDataRequest(server); });
+
+  server.begin();
+  for (;;) {
+    server.handleClient();
+    taskYIELD();
+  }
+}
+
+
+// Handle and serve the data
+void handleDataRequest(WebServer &server) {
+    if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        File dataFile = SD.open(DATA_FILE, FILE_READ);
+        if (dataFile) {
+            // Set download headers
+            server.sendHeader("Content-Type", "text/csv");
+            server.sendHeader("Content-Disposition", "attachment; filename=knee_data.csv");
+            server.sendHeader("Connection", "keep-alive");
+            server.setContentLength(dataFile.size());
+            server.send(200, "text/csv", "");
+            
+            // Stream line by line
+            char buf[128];  // Buffer for each line
+            size_t len = 0;
+            while (dataFile.available()) {
+                len = dataFile.readBytesUntil('\n', buf, sizeof(buf)-1);
+                buf[len] = '\n';  // Add newline
+                server.client().write((uint8_t*)buf, len + 1);
+                
+                // Give other tasks a chance
+                taskYIELD();
+            }
+            
+            dataFile.close();
+        } else {
+            server.send(404, "text/plain", "File not found");
+        }
+        xSemaphoreGive(fileMutex);
+    } else {
+        server.send(503, "text/plain", "Server busy");
+    }
 }
