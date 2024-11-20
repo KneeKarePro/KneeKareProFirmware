@@ -94,7 +94,7 @@ void readDataFromSDCardTask(void *pvParameters);
 void readPotentiometerTask(void *pvParameters);
 
 void setup() {
-  SerialBT.begin("KneeKare Pro Device");
+  SerialBT.begin(F("KneeKare Pro Device"));
 
   // if DEBUG is defined, print to Serial Monitor
   Serial.begin(115200);
@@ -106,21 +106,21 @@ void setup() {
 
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
-    Serial.println("SD Card initialized");
+    Serial.println(F("SD Card initialized"));
     Serial.println("Data will be stored in " + String(DATA_FILE));
   } else if (sd_code == SDError::SD_FAILED_TO_INIT) {
-    Serial.println("Failed to initialize SD Card");
+    Serial.println(F("Failed to initialize SD Card"));
   } else if (sd_code == SDError::SD_FAILED_TO_OPEN_FILE) {
-    Serial.println("Failed to open file");
+    Serial.println(F("Failed to open file"));
   }
 
   uint8_t rtc_code = initRTC();
   if (rtc_code == RTCError::RTC_OK) {
-    Serial.println("RTC initialized");
+    Serial.println(F("RTC initialized"));
   } else if (rtc_code == RTCError::RTC_FAILED_TO_INIT) {
-    Serial.println("Failed to initialize RTC");
+    Serial.println(F("Failed to initialize RTC"));
   } else if (rtc_code == RTCError::RTC_FAILED_TO_SET_TIME) {
-    Serial.println("Failed to set time");
+    Serial.println(F("Failed to set time"));
   }
 
   // put your setup code here, to run once:
