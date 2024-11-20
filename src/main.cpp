@@ -21,8 +21,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
-// For BL Classic communication
-#include <BluetoothSerial.h>
+// Web Server Imports
+#include <WiFi.h>
+#include <WiFiAP.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
 // For the SD card
 #include <FS.h>
 #include <RTClib.h>
@@ -51,9 +54,21 @@ enum RTCError {
   RTC_FAILED_TO_READ_TIME = 3
 };
 
+enum NetworkError {
+  NETWORK_OK = 0,
+  NETWORK_FAILED_TO_INIT = 1,
+  NETWORK_FAILED_TO_SWITCH_MODE = 2
+};
+
+// Web Server Error Codes
+enum WebServerError {
+  WEBSERVER_OK = 0,
+  WEBSERVER_FAILED_TO_INIT = 1,
+  WEBSERVER_FAILED_TO_START = 2
+};
+
 // Global Instances
 RTC_PCF8523 rtc;
-BluetoothSerial SerialBT;
 SemaphoreHandle_t fileMutex;
 QueueHandle_t potDataQueue;
 bool bluetoothConnected = false;
@@ -87,6 +102,10 @@ uint8_t initSDCard(uint8_t csPin = 33); // Initialize the SD card
  */
 uint8_t initRTC();
 
+uint8_t initNetwork();
+
+uint8_t initWebServer();
+
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
 void sdCardTask(void *pvParameters);
@@ -94,7 +113,6 @@ void readDataFromSDCardTask(void *pvParameters);
 void readPotentiometerTask(void *pvParameters);
 
 void setup() {
-  SerialBT.begin(F("KneeKare Pro Device"));
 
   // if DEBUG is defined, print to Serial Monitor
   Serial.begin(115200);
@@ -103,6 +121,18 @@ void setup() {
     ;
   Serial.println(F("Serial Monitor is ready"));
 #endif
+
+    uint8_t net_code = initNetwork();
+    if (net_code == NetworkError::NETWORK_OK)
+    {
+        Serial.println("Network initialized");
+    }
+    else if (net_code == NetworkError::NETWORK_FAILED_TO_INIT)
+    {
+        Serial.println("Failed to initialize network");
+    }
+    
+    // uint8_t ws_code = initWebServer();
 
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
@@ -130,7 +160,6 @@ void setup() {
   // Create tasks with appropriate priorities
   xTaskCreate(readPotentiometerTask, "PotTask", 2048, NULL, 1, NULL);
   xTaskCreate(sdCardTask, "SDTask", 4096, NULL, 2, NULL);
-  xTaskCreate(bluetoothTask, "BTTask", 4096, NULL, 3, NULL);
 }
 
 void loop() {
@@ -170,6 +199,33 @@ uint8_t initRTC() {
   }
 }
 
+uint8_t initNetwork() {
+  if(WiFi.mode(WIFI_AP)) {
+    Serial.println("Switched to AP mode");
+    if(WiFi.softAP("KneeRehab", "password")) {
+      Serial.println("Access Point started");
+      Serial.println("IP Address: " + WiFi.softAPIP().toString());
+      return NetworkError::NETWORK_OK;
+    } else {
+      Serial.println("Failed to start Access Point");
+      return NetworkError::NETWORK_FAILED_TO_INIT;
+    }
+  } else {
+    Serial.println("Failed to switch to AP mode");
+    return NetworkError::NETWORK_FAILED_TO_INIT;
+  }
+};
+
+uint8_t initWebServer() {
+  WebServer server(80);
+  server.on("/", HTTP_GET, [&server]() {
+    server.send(200, "text/plain", "Hello World");
+  });
+
+  server.begin();
+  return WebServerError::WEBSERVER_OK;
+}
+
 // Implement the potentiometer reading task
 void readPotentiometerTask(void *pvParameters) {
   KneeData data;
@@ -201,38 +257,5 @@ void sdCardTask(void *pvParameters) {
       }
     }
     taskYIELD();
-  }
-}
-
-// Implement the Bluetooth task
-void bluetoothTask(void *pvParameters) {
-  File dataFile;
-
-  for (;;) {
-    if (SerialBT.connected()) {
-      if (!bluetoothConnected) {
-        bluetoothConnected = true;
-        Serial.println("Bluetooth Connected");
-      }
-
-      // Transfer data when connected
-      if (!dataTransferred &&
-          xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        dataFile = SD.open(DATA_FILE);
-        if (dataFile) {
-          while (dataFile.available()) {
-            SerialBT.write(dataFile.read());
-          }
-          dataFile.close();
-
-          dataTransferred = true;
-        }
-        xSemaphoreGive(fileMutex);
-      }
-    } else {
-      bluetoothConnected = false;
-      dataTransferred = false;
-    }
-    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
