@@ -5,3 +5,4 @@
 .vscode/ipch
 .cache/clangd/index
 compile_commands.json
+*.csv

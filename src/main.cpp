@@ -21,8 +21,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
-// For BL Classic communication
-#include <BluetoothSerial.h>
+// Web Server Imports
+#include <ESPmDNS.h>
+#include <WebServer.h>
+#include <WiFi.h>
+#include <WiFiAP.h>
 // For the SD card
 #include <FS.h>
 #include <RTClib.h>
@@ -51,9 +54,21 @@ enum RTCError {
   RTC_FAILED_TO_READ_TIME = 3
 };
 
+enum NetworkError {
+  NETWORK_OK = 0,
+  NETWORK_FAILED_TO_INIT = 1,
+  NETWORK_FAILED_TO_SWITCH_MODE = 2
+};
+
+// Web Server Error Codes
+enum WebServerError {
+  WEBSERVER_OK = 0,
+  WEBSERVER_FAILED_TO_INIT = 1,
+  WEBSERVER_FAILED_TO_START = 2
+};
+
 // Global Instances
 RTC_PCF8523 rtc;
-BluetoothSerial SerialBT;
 SemaphoreHandle_t fileMutex;
 QueueHandle_t potDataQueue;
 bool bluetoothConnected = false;
@@ -68,10 +83,10 @@ struct KneeData {
 };
 
 /**
- * @brief Convert the raw value from the potentiometer to an angle
- * @param rawValue The raw value from the potentiometer
- * @return uint16_t The angle in degrees
- */
+  * @brief Convert the raw value from the potentiometer to an angle
+  * @param rawValue The raw value from the potentiometer
+  * @return uint16_t The angle in degrees
+  */
 uint16_t convertToAngle(uint16_t rawValue) {
   return map(rawValue, 0, 4095, 0, 180);
 };
@@ -87,14 +102,21 @@ uint8_t initSDCard(uint8_t csPin = 33); // Initialize the SD card
  */
 uint8_t initRTC();
 
+uint8_t initNetwork();
+
+uint8_t initWebServer();
+
 // Task Prototypes
 void bluetoothTask(void *pvParameters);
 void sdCardTask(void *pvParameters);
 void readDataFromSDCardTask(void *pvParameters);
 void readPotentiometerTask(void *pvParameters);
+void serverTask(void *pvParameters);
+
+// Helper Functions
+void handleDataRequest(WebServer &server);
 
 void setup() {
-  SerialBT.begin(F("KneeKare Pro Device"));
 
   // if DEBUG is defined, print to Serial Monitor
   Serial.begin(115200);
@@ -103,6 +125,20 @@ void setup() {
     ;
   Serial.println(F("Serial Monitor is ready"));
 #endif
+
+  uint8_t net_code = initNetwork();
+  if (net_code == NetworkError::NETWORK_OK) {
+    Serial.println("Network initialized");
+  } else if (net_code == NetworkError::NETWORK_FAILED_TO_INIT) {
+    Serial.println("Failed to initialize network");
+  }
+
+  uint8_t ws_code = initWebServer();
+  if (ws_code == WebServerError::WEBSERVER_OK) {
+    Serial.println("Web Server initialized");
+  } else if (ws_code == WebServerError::WEBSERVER_FAILED_TO_INIT) {
+    Serial.println("Failed to initialize Web Server");
+  }
 
   uint8_t sd_code = initSDCard(33);
   if (sd_code == SDError::SD_OK) {
@@ -130,7 +166,7 @@ void setup() {
   // Create tasks with appropriate priorities
   xTaskCreate(readPotentiometerTask, "PotTask", 2048, NULL, 1, NULL);
   xTaskCreate(sdCardTask, "SDTask", 4096, NULL, 2, NULL);
-  xTaskCreate(bluetoothTask, "BTTask", 4096, NULL, 3, NULL);
+  xTaskCreate(serverTask, "Server", 4096, NULL, 2, NULL);
 }
 
 void loop() {
@@ -170,6 +206,39 @@ uint8_t initRTC() {
   }
 }
 
+uint8_t initNetwork() {
+  if (WiFi.mode(WIFI_AP)) {
+    Serial.println("Switched to AP mode");
+    if (WiFi.softAP("KneeRehab", "password")) {
+      Serial.println("Access Point started");
+      Serial.println("IP Address: " + WiFi.softAPIP().toString());
+      return NetworkError::NETWORK_OK;
+    } else {
+      Serial.println("Failed to start Access Point");
+      return NetworkError::NETWORK_FAILED_TO_INIT;
+    }
+  } else {
+    Serial.println("Failed to switch to AP mode");
+    return NetworkError::NETWORK_FAILED_TO_INIT;
+  }
+};
+
+uint8_t initWebServer() {
+  // settings up dns
+  if (!MDNS.begin("knee-rehab")) {
+    Serial.println("Failed to start mDNS");
+    return WebServerError::WEBSERVER_FAILED_TO_INIT;
+  } else {
+    Serial.println("mDNS started as knee-rehab.local");
+  }
+  WebServer server(80);
+  server.on("/", HTTP_GET,
+            [&server]() { server.send(200, "text/plain", "Hello World"); });
+
+  server.begin();
+  return WebServerError::WEBSERVER_OK;
+}
+
 // Implement the potentiometer reading task
 void readPotentiometerTask(void *pvParameters) {
   KneeData data;
@@ -204,35 +273,47 @@ void sdCardTask(void *pvParameters) {
   }
 }
 
-// Implement the Bluetooth task
-void bluetoothTask(void *pvParameters) {
-  File dataFile;
+void serverTask(void *pvParameters) {
+  WebServer server(80);
+  server.on("/", HTTP_GET,
+            [&server]() { server.send(200, "text/plain", "Hello World"); });
 
+  server.on("/data", HTTP_GET, [&server]() { handleDataRequest(server); });
+
+  server.begin();
   for (;;) {
-    if (SerialBT.connected()) {
-      if (!bluetoothConnected) {
-        bluetoothConnected = true;
-        Serial.println("Bluetooth Connected");
-      }
+    server.handleClient();
+    taskYIELD();
+  }
+}
 
-      // Transfer data when connected
-      if (!dataTransferred &&
-          xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        dataFile = SD.open(DATA_FILE);
+
+// Handle and serve the data
+void handleDataRequest(WebServer &server) {
+    if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        File dataFile = SD.open(DATA_FILE, FILE_READ);
         if (dataFile) {
-          while (dataFile.available()) {
-            SerialBT.write(dataFile.read());
-          }
-          dataFile.close();
-
-          dataTransferred = true;
+            // Set download headers
+            server.sendHeader("Content-Type", "text/csv");
+            server.sendHeader("Content-Disposition", "attachment; filename=knee_data.csv");
+            server.sendHeader("Connection", "keep-alive");
+            server.setContentLength(dataFile.size());
+            server.send(200, "text/csv", "");
+            
+            // Use a larger transfer buffer
+            static uint8_t buffer[2048];
+            size_t bytesRead;
+            while ((bytesRead = dataFile.read(buffer, sizeof(buffer))) > 0) {
+              server.client().write(buffer, bytesRead);
+              taskYIELD();
+            }
+            
+            dataFile.close();
+        } else {
+            server.send(404, "text/plain", "File not found");
         }
         xSemaphoreGive(fileMutex);
-      }
     } else {
-      bluetoothConnected = false;
-      dataTransferred = false;
+        server.send(503, "text/plain", "Server busy");
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
 }

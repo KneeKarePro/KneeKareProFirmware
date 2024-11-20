@@ -10,6 +10,7 @@ upload:
 
 clean: 
 	pio -f -c vim run --target clean
+	rm knee_data.csv
 
 program: 
 	pio -f -c vim run --target program
@@ -28,3 +29,6 @@ upload-and-monitor: upload monitor
 
 clang: 
 	pio run --target compiledb
+
+request:
+	curl -o knee_data.csv http://knee-rehab.local/data
