@@ -34,7 +34,7 @@
 #include <time.h>
 
 // Debug Definitions
-#define DEBUG 1
+#define DEBUG 0
 
 // SD Error Codes
 enum SDError {
@@ -79,14 +79,15 @@ const char *DATA_FILE = "/pot_data.txt";
 
 struct KneeData {
   uint32_t time;
+  uint16_t millis;
   uint16_t angle;
 };
 
 /**
-  * @brief Convert the raw value from the potentiometer to an angle
-  * @param rawValue The raw value from the potentiometer
-  * @return uint16_t The angle in degrees
-  */
+ * @brief Convert the raw value from the potentiometer to an angle
+ * @param rawValue The raw value from the potentiometer
+ * @return uint16_t The angle in degrees
+ */
 uint16_t convertToAngle(uint16_t rawValue) {
   return map(rawValue, 0, 4095, 0, 180);
 };
@@ -183,7 +184,7 @@ uint8_t initSDCard(uint8_t csPin) {
       File dataFile = SD.open(DATA_FILE, FILE_WRITE);
       // write header to file
       if (dataFile) {
-        dataFile.println("Time,Angle");
+        dataFile.println("Time,Millis,Angle");
         dataFile.close();
         return SDError::SD_OK;
       }
@@ -246,6 +247,9 @@ void readPotentiometerTask(void *pvParameters) {
 
   for (;;) {
     data.time = rtc.now().unixtime();
+    data.millis = uint16_t(
+        millis() %
+        1000); // milliseconds cast to uint16_t instead of unsigned long
     data.angle = convertToAngle(analogRead(POT_PIN));
 
     xQueueSend(potDataQueue, &data, 0);
@@ -263,7 +267,7 @@ void sdCardTask(void *pvParameters) {
       if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         dataFile = SD.open(DATA_FILE, FILE_APPEND);
         if (dataFile) {
-          dataFile.printf("%d,%d\n", data.time, data.angle);
+          dataFile.printf("%d,%d,%d\n", data.time, data.millis, data.angle);
           dataFile.close();
         }
         xSemaphoreGive(fileMutex);
@@ -287,33 +291,33 @@ void serverTask(void *pvParameters) {
   }
 }
 
-
 // Handle and serve the data
 void handleDataRequest(WebServer &server) {
-    if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        File dataFile = SD.open(DATA_FILE, FILE_READ);
-        if (dataFile) {
-            // Set download headers
-            server.sendHeader("Content-Type", "text/csv");
-            server.sendHeader("Content-Disposition", "attachment; filename=knee_data.csv");
-            server.sendHeader("Connection", "keep-alive");
-            server.setContentLength(dataFile.size());
-            server.send(200, "text/csv", "");
-            
-            // Use a larger transfer buffer
-            static uint8_t buffer[2048];
-            size_t bytesRead;
-            while ((bytesRead = dataFile.read(buffer, sizeof(buffer))) > 0) {
-              server.client().write(buffer, bytesRead);
-              taskYIELD();
-            }
-            
-            dataFile.close();
-        } else {
-            server.send(404, "text/plain", "File not found");
-        }
-        xSemaphoreGive(fileMutex);
+  if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    File dataFile = SD.open(DATA_FILE, FILE_READ);
+    if (dataFile) {
+      // Set download headers
+      server.sendHeader("Content-Type", "text/csv");
+      server.sendHeader("Content-Disposition",
+                        "attachment; filename=knee_data.csv");
+      server.sendHeader("Connection", "keep-alive");
+      server.setContentLength(dataFile.size());
+      server.send(200, "text/csv", "");
+
+      // Use a larger transfer buffer
+      static uint8_t buffer[2048];
+      size_t bytesRead;
+      while ((bytesRead = dataFile.read(buffer, sizeof(buffer))) > 0) {
+        server.client().write(buffer, bytesRead);
+        taskYIELD();
+      }
+
+      dataFile.close();
     } else {
-        server.send(503, "text/plain", "Server busy");
+      server.send(404, "text/plain", "File not found");
     }
+    xSemaphoreGive(fileMutex);
+  } else {
+    server.send(503, "text/plain", "Server busy");
+  }
 }
