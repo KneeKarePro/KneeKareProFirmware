@@ -300,16 +300,12 @@ void handleDataRequest(WebServer &server) {
             server.setContentLength(dataFile.size());
             server.send(200, "text/csv", "");
             
-            // Stream line by line
-            char buf[128];  // Buffer for each line
-            size_t len = 0;
-            while (dataFile.available()) {
-                len = dataFile.readBytesUntil('\n', buf, sizeof(buf)-1);
-                buf[len] = '\n';  // Add newline
-                server.client().write((uint8_t*)buf, len + 1);
-                
-                // Give other tasks a chance
-                taskYIELD();
+            // Use a larger transfer buffer
+            static uint8_t buffer[2048];
+            size_t bytesRead;
+            while ((bytesRead = dataFile.read(buffer, sizeof(buffer))) > 0) {
+              server.client().write(buffer, bytesRead);
+              taskYIELD();
             }
             
             dataFile.close();
