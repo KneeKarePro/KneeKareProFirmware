@@ -90,16 +90,17 @@ struct KneeData {
  * @return uint16_t The angle in degrees
  */
 uint16_t convertToAngle(uint16_t rawValue) {
-  return map(rawValue, 0, 4095, 0, 180);
+  return map(rawValue, 0, 900, 0, 100);
 };
 
 // Function to read the ADC value from the potentiometer
 uint16_t convertADC(uint16_t adc_value) {
-  float degree = ((adc_value) / 4095.0) * 290.0 / 11.0 * 9.0;  // Adjust with baseline
-  if (degree < 0) degree = 0;  // Ensure we don't get negative values
+  float degree =
+      ((adc_value) / 4095.0) * 290.0 / 11.0 * 9.0; // Adjust with baseline
+  if (degree < 0)
+    degree = 0; // Ensure we don't get negative values
   return degree;
 }
-
 
 /**
  * @brief Initialize the SD card
@@ -262,9 +263,10 @@ void readPotentiometerTask(void *pvParameters) {
     data.millis = uint16_t(
         millis() %
         1000); // milliseconds cast to uint16_t instead of unsigned long
-    data.angle = convertADC(analogRead(POT_PIN));
+    data.angle = convertToAngle(analogRead(POT_PIN));
     Serial.println("Time: " + String(data.time) + " Millis: " +
                    String(data.millis) + " Angle: " + String(data.angle));
+    Serial.println("Raw ADC: " + String(analogRead(POT_PIN)));
 
     xQueueSend(potDataQueue, &data, 0);
     vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(10)); // 100Hz sampling
