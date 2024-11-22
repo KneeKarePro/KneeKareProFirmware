@@ -1,0 +1,53 @@
+\doxysection{init.\+h}
+\hypertarget{init_8h_source}{}\label{init_8h_source}\index{include/init.h@{include/init.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ INIT\_H}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ INIT\_H}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <Arduino.h>}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <globals.h>}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{enum}\ SDError\ \{}
+\DoxyCodeLine{00034\ \ \ SD\_OK\ =\ 0,}
+\DoxyCodeLine{00035\ \ \ SD\_FAILED\_TO\_INIT\ =\ 1,}
+\DoxyCodeLine{00036\ \ \ SD\_FAILED\_TO\_OPEN\_FILE\ =\ 2,}
+\DoxyCodeLine{00037\ \ \ SD\_FAILED\_TO\_WRITE\_FILE\ =\ 3,}
+\DoxyCodeLine{00038\ \ \ SD\_FAILED\_TO\_READ\_FILE\ =\ 4,}
+\DoxyCodeLine{00039\ \ \ SD\_FAILED\_TO\_DELETE\_FILE\ =\ 5}
+\DoxyCodeLine{00040\ \};}
+\DoxyCodeLine{00041\ }
+\DoxyCodeLine{00042\ }
+\DoxyCodeLine{00064\ \textcolor{keyword}{enum}\ RTCError\ \{}
+\DoxyCodeLine{00065\ \ \ RTC\_OK\ =\ 0,}
+\DoxyCodeLine{00066\ \ \ RTC\_FAILED\_TO\_INIT\ =\ 1,}
+\DoxyCodeLine{00067\ \ \ RTC\_FAILED\_TO\_SET\_TIME\ =\ 2,}
+\DoxyCodeLine{00068\ \ \ RTC\_FAILED\_TO\_READ\_TIME\ =\ 3}
+\DoxyCodeLine{00069\ \};}
+\DoxyCodeLine{00070\ }
+\DoxyCodeLine{00087\ \textcolor{keyword}{enum}\ NetworkError\ \{}
+\DoxyCodeLine{00088\ \ \ NETWORK\_OK\ =\ 0,}
+\DoxyCodeLine{00089\ \ \ NETWORK\_FAILED\_TO\_INIT\ =\ 1,}
+\DoxyCodeLine{00090\ \ \ NETWORK\_FAILED\_TO\_SWITCH\_MODE\ =\ 2}
+\DoxyCodeLine{00091\ \};}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00109\ \textcolor{keyword}{enum}\ WebServerError\ \{}
+\DoxyCodeLine{00110\ \ \ WEBSERVER\_OK\ =\ 0,}
+\DoxyCodeLine{00111\ \ \ WEBSERVER\_FAILED\_TO\_INIT\ =\ 1,}
+\DoxyCodeLine{00112\ \ \ WEBSERVER\_FAILED\_TO\_START\ =\ 2}
+\DoxyCodeLine{00113\ \};}
+\DoxyCodeLine{00114\ }
+\DoxyCodeLine{00115\ \textcolor{comment}{//\ Function\ Prototypes}}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00139\ SDError\ initSDCard(uint8\_t\ csPin);}
+\DoxyCodeLine{00140\ }
+\DoxyCodeLine{00162\ RTCError\ initRTC();}
+\DoxyCodeLine{00163\ }
+\DoxyCodeLine{00184\ NetworkError\ initNetwork();}
+\DoxyCodeLine{00185\ }
+\DoxyCodeLine{00207\ WebServerError\ initWebServer();}
+\DoxyCodeLine{00208\ }
+\DoxyCodeLine{00209\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ INIT\_H}}
+
+\end{DoxyCode}
