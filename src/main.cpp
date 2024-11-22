@@ -21,7 +21,7 @@
 void setup() {
   Serial.begin(115200);
 
-  initSDCard(5);
+  initSDCard(33);
   initRTC();
   initNetwork();
   initWebServer();
