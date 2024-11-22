@@ -1,0 +1,38 @@
+\doxysection{globals.\+h}
+\hypertarget{globals_8h_source}{}\label{globals_8h_source}\index{include/globals.h@{include/globals.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ GLOBALS\_H}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ GLOBALS\_H}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <Arduino.h>}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <RTClib.h>}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#include\ <SD.h>}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ <WebServer.h>}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#include\ <ESPmDNS.h>}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <freertos/FreeRTOS.h>}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <freertos/semphr.h>}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <freertos/task.h>}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#include\ <freertos/queue.h>}}
+\DoxyCodeLine{00013\ }
+\DoxyCodeLine{00018\ \textcolor{keyword}{extern}\ RTC\_PCF8523\ rtc;}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00024\ \textcolor{keyword}{extern}\ SemaphoreHandle\_t\ fileMutex;}
+\DoxyCodeLine{00025\ }
+\DoxyCodeLine{00030\ \textcolor{keyword}{extern}\ QueueHandle\_t\ potDataQueue;}
+\DoxyCodeLine{00031\ }
+\DoxyCodeLine{00036\ \textcolor{keyword}{extern}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ POT\_PIN;}
+\DoxyCodeLine{00037\ }
+\DoxyCodeLine{00042\ \textcolor{keyword}{extern}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *DATA\_FILE;}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00048\ \textcolor{keyword}{extern}\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{int}\ QUEUE\_SIZE;}
+\DoxyCodeLine{00049\ }
+\DoxyCodeLine{00059\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{struct_knee_data}{KneeData}}\ \{}
+\DoxyCodeLine{00060\ \ \ uint32\_t\ time;}
+\DoxyCodeLine{00061\ \ \ uint16\_t\ millis;}
+\DoxyCodeLine{00062\ \ \ uint16\_t\ angle;}
+\DoxyCodeLine{00063\ \};}
+\DoxyCodeLine{00064\ }
+\DoxyCodeLine{00065\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ GLOBALS\_H}}
+
+\end{DoxyCode}

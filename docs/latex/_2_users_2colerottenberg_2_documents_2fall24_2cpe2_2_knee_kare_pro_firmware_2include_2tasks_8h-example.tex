@@ -1,0 +1,42 @@
+\doxysection{/\+Users/colerottenberg/\+Documents/fall24/cpe2/\+Knee\+Kare\+Pro\+Firmware/include/tasks.\+h}
+\hypertarget{_2_users_2colerottenberg_2_documents_2fall24_2cpe2_2_knee_kare_pro_firmware_2include_2tasks_8h-example}{}\label{_2_users_2colerottenberg_2_documents_2fall24_2cpe2_2_knee_kare_pro_firmware_2include_2tasks_8h-example}Task to read data from the potentiometer sensor.
+
+Task to read data from the potentiometer sensor. This Free\+RTOS task reads analog values from the potentiometer at regular intervals, converts them to angles, and sends the data to a queue for processing by other tasks.
+
+
+\begin{DoxyParams}{Parameters}
+{\em pv\+Parameters} & Pointer to task parameters (unused in this task).\\
+\hline
+\end{DoxyParams}
+\begin{DoxyNote}{Note}
+Ensure that the potentiometer is connected to the correct analog pin defined by {\ttfamily POT\+\_\+\+PIN}.
+\end{DoxyNote}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{comment}{//\ Create\ the\ potentiometer\ reading\ task}}
+\DoxyCodeLine{xTaskCreate(readPotentiometerTask,\ \textcolor{stringliteral}{"{}PotTask"{}},\ 2048,\ NULL,\ 1,\ NULL);}
+
+\end{DoxyCode}
+
+
+
+\begin{DoxyCodeInclude}{0}
+\DoxyCodeLine{\textcolor{preprocessor}{\#ifndef\ TASKS\_H}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#define\ TASKS\_H}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include\ <Arduino.h>}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include\ "{}globals.h"{}}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include\ <WebServer.h>}\ \textcolor{comment}{//\ Include\ WebServer\ for\ handleDataRequest}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordtype}{void}\ readPotentiometerTask(\textcolor{keywordtype}{void}\ *pvParameters);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordtype}{void}\ sdCardTask(\textcolor{keywordtype}{void}\ *pvParameters);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordtype}{void}\ serverTask(\textcolor{keywordtype}{void}\ *pvParameters);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordtype}{void}\ handleDataRequest(WebServer\ \&server);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ TASKS\_H}}
+
+\end{DoxyCodeInclude}
+ 
