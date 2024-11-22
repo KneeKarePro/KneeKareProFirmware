@@ -3,12 +3,11 @@
 #include "utils.h"
 #include <Arduino.h>
 
-void readPotentiometerTask(void *pvParameters){
+void readPotentiometerTask(void *pvParameters) {
   KneeData data;
   TickType_t lastWakeTime = xTaskGetTickCount();
 
-  for (;;)
-  {
+  for (;;) {
     data.time = rtc.now().unixtime();
     data.millis = millis() % 1000;
     data.angle = convertToAngle(analogRead(POT_PIN));
@@ -17,19 +16,15 @@ void readPotentiometerTask(void *pvParameters){
   }
 }
 
-void sdCardTask(void *pvParameters){
+void sdCardTask(void *pvParameters) {
   KneeData data;
   File dataFile;
 
-  for (;;)
-  {
-    if (xQueueReceive(potDataQueue, &data, pdMS_TO_TICKS(100)) == pdTRUE)
-    {
-      if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE)
-      {
+  for (;;) {
+    if (xQueueReceive(potDataQueue, &data, pdMS_TO_TICKS(100)) == pdTRUE) {
+      if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         dataFile = SD.open(DATA_FILE, FILE_APPEND);
-        if (dataFile)
-        {
+        if (dataFile) {
           dataFile.printf("%d,%d,%d\n", data.time, data.millis, data.angle);
           dataFile.close();
         }
@@ -40,37 +35,45 @@ void sdCardTask(void *pvParameters){
   }
 }
 
-void serverTask(void *pvParameters){
+void serverTask(void *pvParameters) {
   WebServer server(80);
-  server.on("/", HTTP_GET, [&server]() { server.send(200, "text/plain", "Hello World"); });
+  server.on("/", HTTP_GET,
+            [&server]() { server.send(200, "text/plain", "Hello World"); });
   server.on("/data", HTTP_GET, [&server]() { handleDataRequest(server); });
   server.begin();
 
-  for (;;)
-  {
+  for (;;) {
     server.handleClient();
     taskYIELD();
   }
 }
 
-void handleDataRequest(WebServer &server){
-  if(xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE){
+void handleDataRequest(WebServer &server) {
+  if (xSemaphoreTake(fileMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
     File dataFile = SD.open(DATA_FILE, FILE_READ);
-    if(dataFile){
+    if (dataFile) {
+      // Set download headers
       server.sendHeader("Content-Type", "text/csv");
-      server.sendHeader("Content-Disposition", "attachment; filename=knee_data.csv");
+      server.sendHeader("Content-Disposition",
+                        "attachment; filename=knee_data.csv");
+      server.sendHeader("Connection", "keep-alive");
+      server.setContentLength(dataFile.size());
       server.send(200, "text/csv", "");
 
+      // Use a larger transfer buffer
       static uint8_t buffer[2048];
-      size_t bytesRead = 0;
-      while((bytesRead = dataFile.read(buffer, sizeof(buffer))) > 0){
+      size_t bytesRead;
+      while ((bytesRead = dataFile.read(buffer, sizeof(buffer))) > 0) {
         server.client().write(buffer, bytesRead);
         taskYIELD();
       }
+
       dataFile.close();
+    } else {
+      server.send(404, "text/plain", "File not found");
     }
-    else {
-      server.send(503, "text/plain", "Server Busy");
-    }
-    }
+    xSemaphoreGive(fileMutex);
+  } else {
+    server.send(503, "text/plain", "Server busy");
+  }
 }
