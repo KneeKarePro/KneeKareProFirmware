@@ -13,7 +13,7 @@ This project implements a real-time data logging system for knee rehabilitation 
 - Error handling and system status monitoring
 
 ## Hardware Requirements
-- ESP32 Development Board (Feather ESP32)
+- ESP32 Development Board (Feather ESP32 HUZZAH32)
 - PCF8523 Real-Time Clock Module
 - SD Card Module (SPI interface)
 - Potentiometer (10kΩ recommended)
